@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure Image Encryptor (AES-256-GCM)</title>
+
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; padding: 40px 20px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            font-family: "Segoe UI", sans-serif;
+            color: #fff;
+            display: flex; justify-content: center;
+        }
+        .container {
+            width: 100%; max-width: 800px;
+            backdrop-filter: blur(12px);
+            background: rgba(255, 255, 255, 0.12);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        h1 { text-align: center; margin-bottom: 30px; font-size: 32px; }
+        .section {
+            margin-bottom: 50px; padding: 25px;
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.18);
+        }
+        h2 { margin-bottom: 15px; font-size: 22px; }
+        label { display: block; margin: 10px 0 6px; opacity: 0.9; }
+        input[type="file"], input[type="text"] {
+            width: 100%; padding: 12px; border-radius: 10px;
+            border: none; margin-bottom: 12px;
+            background: rgba(255,255,255,0.25);
+            color:white; font-size: 15px;
+        }
+        button {
+            width:100%; padding:14px; margin-top:10px;
+            border:none; border-radius:12px;
+            background:linear-gradient(135deg,#6a89ff,#9473ff);
+            font-size:17px; color:white;
+            cursor:pointer; font-weight:600;
+        }
+        .status { margin-top:15px; padding:12px; border-radius:10px; text-align:center; font-weight:bold; }
+        .success { background:rgba(76,175,80,0.3); }
+        .error { background:rgba(255,82,82,0.3); }
+        .preview img { max-width:100%; border-radius:15px; }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+    <h1>🔐 Secure AES-256-GCM Image Encryptor</h1>
+
+    <div class="section">
+        <h2>Encrypt Image</h2>
+
+        <label>Select Image OR Paste (Ctrl+V):</label>
+        <input type="file" id="encImage" accept="image/*">
+
+        <label>Key 1 (10 digits):</label>
+        <input type="text" id="key1" maxlength="10">
+
+        <label>Key 2 (10 digits):</label>
+        <input type="text" id="key2" maxlength="10">
+
+        <button onclick="encryptFile()">Encrypt & Download</button>
+        <div id="encStatus"></div>
+    </div>
+
+    <div class="section">
+        <h2>Decrypt File (.enc)</h2>
+        <label>Select Encrypted File:</label>
+        <input type="file" id="decFile" accept=".enc">
+
+        <label>Key 1 (10 digits):</label>
+        <input type="text" id="dkey1" maxlength="10">
+
+        <label>Key 2 (10 digits):</label>
+        <input type="text" id="dkey2" maxlength="10">
+
+        <button onclick="decryptFile()">Decrypt & Display</button>
+
+        <div id="decStatus"></div>
+        <div class="preview" id="outputPreview"></div>
+    </div>
+</div>
+
+<script>
+
+// --- CLIPBOARD IMAGE SUPPORT ---
+let pastedImageBlob = null;
+
+document.addEventListener("paste", async (e) => {
+    for (const item of e.clipboardData.items) {
+        if (item.type.startsWith("image/")) {
+            pastedImageBlob = item.getAsFile();
+
+            // Simulate file selection
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(pastedImageBlob);
+            document.getElementById("encImage").files = dataTransfer.files;
+
+            document.getElementById("encStatus").innerHTML =
+                `<div class="status success">✓ Image pasted from clipboard!</div>`;
+            return;
+        }
+    }
+});
+
+// ----------------- Encryption Logic -----------------
+
+async function deriveKey(k1, k2, salt) {
+    const clean1 = k1.replace(/[^0-9]/g, "");
+    const clean2 = k2.replace(/[^0-9]/g, "");
+    const encoder = new TextEncoder();
+    const material = encoder.encode(clean1 + clean2);
+
+    const keyMaterial = await crypto.subtle.importKey(
+        "raw", material, "PBKDF2", false, ["deriveKey"]
+    );
+
+    return crypto.subtle.deriveKey(
+        { name: "PBKDF2", salt, iterations: 200000, hash: "SHA-256" },
+        keyMaterial,
+        { name: "AES-GCM", length: 256 },
+        false,
+        ["encrypt", "decrypt"]
+    );
+}
+
+function concatArrays(arr) {
+    let len = arr.reduce((a,b) => a + b.length, 0);
+    const merged = new Uint8Array(len);
+    let offset = 0;
+    arr.forEach(a => { merged.set(a, offset); offset += a.length; });
+    return merged;
+}
+
+async function encryptFile() {
+    const fileInput = document.getElementById("encImage");
+    const file = pastedImageBlob || fileInput.files[0];
+
+    const key1 = document.getElementById("key1").value;
+    const key2 = document.getElementById("key2").value;
+    const status = document.getElementById("encStatus");
+
+    if (!file) return status.innerHTML = `<div class="status error">No image selected or pasted.</div>`;
+    if (key1.length !== 10 || key2.length !== 10)
+        return status.innerHTML = `<div class="status error">Keys must be 10 digits.</div>`;
+
+    const data = await file.arrayBuffer();
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const key = await deriveKey(key1, key2, salt);
+
+    const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, data);
+    const finalData = concatArrays([salt, iv, new Uint8Array(encrypted)]);
+
+    const blob = new Blob([finalData]);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = (file.name || "clipboard_image") + ".enc";
+    a.click();
+
+    status.innerHTML = `<div class="status success">✓ Encrypted & downloaded!</div>`;
+}
+
+async function decryptFile() {
+    const file = document.getElementById("decFile").files[0];
+    const key1 = document.getElementById("dkey1").value;
+    const key2 = document.getElementById("dkey2").value;
+    const status = document.getElementById("decStatus");
+    const preview = document.getElementById("outputPreview");
+
+    preview.innerHTML = "";
+
+    if (!file) return status.innerHTML = `<div class="status error">Select a .enc file.</div>`;
+    if (key1.length !== 10 || key2.length !== 10)
+        return status.innerHTML = `<div class="status error">Keys must be 10 digits.</div>`;
+
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const salt = bytes.slice(0, 16);
+    const iv = bytes.slice(16, 28);
+    const ciphertext = bytes.slice(28);
+
+    try {
+        const key = await deriveKey(key1, key2, salt);
+        const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
+
+        const blob = new Blob([decrypted]);
+        const url = URL.createObjectURL(blob);
+        const img = document.createElement("img");
+        img.src = url;
+
+        preview.appendChild(img);
+        status.innerHTML = `<div class="status success">✓ File decrypted!</div>`;
+    } catch {
+        status.innerHTML = `<div class="status error">✗ Wrong key or corrupted file.</div>`;
+    }
+}
+</script>
+
+</body>
+</html>
