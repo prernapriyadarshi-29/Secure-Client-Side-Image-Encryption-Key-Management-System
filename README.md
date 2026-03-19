@@ -9,9 +9,15 @@ This project eliminates that risk by:
 
 Advanced Security Contributions:
  Post-Quantum Security Considerations-
+ 
 -This project incorporates forward-looking security measures to remain resilient against potential quantum computing threats.
+
 -Uses AES-256-GCM, which is considered quantum-resistant (Grover’s algorithm only reduces strength to ~128 bits)
+
 -Relies on SHA-256 in PBKDF2, maintaining strong pre-image resistance even in post-quantum scenarios
+
 -Avoids weak or deprecated cryptographic primitives
+
 -Designed with a zero-trust architecture, minimizing exposure even under advanced attack models
+
 -While not fully post-quantum cryptography, the system is quantum-aware and future-resilient.
