@@ -21,3 +21,27 @@ Advanced Security Contributions:
 -Designed with a zero-trust architecture, minimizing exposure even under advanced attack models
 
 -While not fully post-quantum cryptography, the system is quantum-aware and future-resilient.
+
+NIST Testing Readiness:
+
+The system is designed to be compatible with evaluation methodologies inspired by National Institute of Standards and Technology (NIST).
+
+-Cryptographic components align with NIST-recommended standards:
+
+--AES-256-GCM
+
+--PBKDF2-SHA256
+
+-Structured output format (salt | IV | ciphertext | tag) enables:
+
+--Randomness testing (salt & IV)
+
+--Integrity validation via authentication tags
+
+-Ready for:
+
+--Statistical randomness testing (e.g., NIST test suites)
+
+--Cryptographic validation workflows
+
+The architecture allows future integration with formal NIST validation tools and test suites.
